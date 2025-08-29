@@ -1,33 +1,46 @@
-import React, { useState, useEffect } from "react";
+// src/pages/TodoPage.js
+
+import React, { useState, useEffect, useCallback } from "react";
 import TodoForm from "../../components/TodoForm.js";
 import TodoList from "../../components/TodoList.js";
+import SearchInput from "../../components/SearchInput.js";
 
 const TodoPage = () => {
   const [todos, setTodos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [editingTodoId, setEditingTodoId] = useState(null);
+  const [searchTerm, setSearchTerm] = useState("");
 
-  const fetchTodos = () => {
-    fetch("/api/todos")
+  const fetchTodos = useCallback((searchQuery) => {
+    setLoading(true);
+    const url = searchQuery
+      ? `/api/todos?search=${encodeURIComponent(searchQuery)}`
+      : "/api/todos";
+
+    fetch(url)
       .then((response) => {
-        if (!response.ok) {
+        if (!response.ok)
           throw new Error(`HTTP error! status: ${response.status}`);
-        }
         return response.json();
       })
       .then((data) => {
         setTodos(data.todos);
-        setLoading(false);
+        setError(null);
       })
       .catch((err) => {
         setError(err.message);
-        setLoading(false);
-      });
-  };
+        setTodos([]);
+      })
+      .finally(() => setLoading(false));
+  }, []);
 
   useEffect(() => {
-    fetchTodos();
-  }, []);
+    const timerId = setTimeout(() => {
+      fetchTodos(searchTerm);
+    }, 500);
+    return () => clearTimeout(timerId);
+  }, [searchTerm, fetchTodos]);
 
   const handleAddTodo = (task) => {
     fetch("/api/todos", {
@@ -39,7 +52,12 @@ const TodoPage = () => {
     })
       .then((response) => response.json())
       .then((data) => {
-        setTodos([...todos, { id: data.id, task: data.task, completed: false }]);
+        if (data.task.toLowerCase().includes(searchTerm.toLowerCase())) {
+          setTodos([
+            ...todos,
+            { id: data.id, task: data.task, completed: false },
+          ]);
+        }
       })
       .catch((err) => console.error("Error adding todo:", err));
   };
@@ -86,40 +104,86 @@ const TodoPage = () => {
             todo.id === id ? { ...todo, task: newTask } : todo
           )
         );
+        setEditingTodoId(null);
       })
       .catch((err) => console.error("Error updating todo:", err));
   };
 
+  
+  const pageContainerStyle = {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center", 
+    padding: "40px 20px",
+    backgroundColor: "#1f2937", 
+    minHeight: "100vh",
+    fontFamily: "'Poppins', sans-serif",
+    color: "#e2e8f0", 
+    boxSizing: "border-box", 
+  };
+
+
+  const contentWrapperStyle = {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    width: "100%",
+    maxWidth: "600px", 
+  };
+
+  const headingStyle = {
+    fontSize: "2.5em",
+    fontWeight: "800",
+    color: "#60a5fa", 
+    marginBottom: "20px",
+    textAlign: "center",
+  };
+
+  const loadingStyle = {
+    textAlign: "center",
+    color: "#60a5fa",
+    fontSize: "1.5em",
+    marginTop: "50px",
+  };
+
+  const errorStyle = {
+    textAlign: "center",
+    color: "#ef4444",
+    fontSize: "1.2em",
+    marginTop: "50px",
+  };
+
   if (loading) {
-    return <div style={{ textAlign: "center" }}>Loading...</div>;
+    return (
+      <div style={pageContainerStyle}>
+        <div style={loadingStyle}>Memuat...</div>
+      </div>
+    );
   }
 
   if (error) {
     return (
-      <div style={{ textAlign: "center", color: "red" }}>Error: {error}</div>
+      <div style={pageContainerStyle}>
+        <div style={errorStyle}>Terjadi kesalahan: {error}</div>
+      </div>
     );
   }
 
   return (
-    <div
-      style={{
-        padding: "20px",
-        maxWidth: "800px",
-        margin: "0 auto",
-        fontFamily: "sans-serif",
-      }}
-    >
-      <header style={{ textAlign: "center" }}>
-        <h1>Aplikasi Todo List</h1>
+    <div style={pageContainerStyle}>
+      <div style={contentWrapperStyle}>
+        <h1 style={headingStyle}>Daftar Tugas Anda</h1>
+        <SearchInput searchTerm={searchTerm} setSearchTerm={setSearchTerm} />
         <TodoForm onAddTodo={handleAddTodo} />
-        <h2>Daftar Tugas Anda</h2>
         <TodoList
           todos={todos}
           onToggleCompleted={handleToggleCompleted}
           onDeleteTodo={handleDeleteTodo}
-          onUpdateTodo={handleUpdateTodo}  
+          onUpdateTodo={handleUpdateTodo}
+          editingTodoId={editingTodoId}
+          onSetEditingTodoId={setEditingTodoId}
         />
-      </header>
+      </div>
     </div>
   );
 };
